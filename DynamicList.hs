@@ -9,13 +9,14 @@ import Data.GADT.Compare.TH
 import Control.Monad (forM)
 import Data.Maybe -- (isNothing)
 
-import Widgets (Pipe(Pipe), Config)
+import Widgets (Pipe(Pipe))
 import Lib
 import Reflex.Dom
 import Fake
 import NonTextual
 
-fakeUpdate _ _ = fake [Just "problem updating",Nothing]
+fakeUpdate :: MS m => Operation a -> m (ES (Maybe Text))
+fakeUpdate _ = fake [(1,Just "problem updating"),(10,Nothing)]
 
 data Operation a = Del a | Add a
 

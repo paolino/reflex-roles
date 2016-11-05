@@ -36,4 +36,3 @@ runSink (Sink w) s0 ea = do
           h <- holdDyn (Right s0) $ leftmost [Right <$> r, Left <$> ea]
   return ()
 
-type Config k = DMap k Identity

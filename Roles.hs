@@ -1,4 +1,4 @@
-{-# LANGUAGE RecursiveDo, GADTs, InstanceSigs ,QuasiQuotes,FlexibleInstances,TemplateHaskell, TupleSections, ScopedTypeVariables, ConstraintKinds, FlexibleContexts, OverloadedStrings, OverlappingInstances, OverloadedLists#-}
+{-# LANGUAGE RecursiveDo, GADTs, InstanceSigs ,QuasiQuotes,FlexibleInstances,TemplateHaskell, TupleSections, ScopedTypeVariables, ConstraintKinds, FlexibleContexts, OverloadedStrings,  OverloadedLists#-}
 import Reflex.Dom
 import Prelude hiding ((.),id, lookup)
 import Control.Monad (void,forM,forM_)
@@ -6,9 +6,9 @@ import Control.Lens (view,(.~),(&))
 -- import Data.GADT.Compare
 import Data.GADT.Compare.TH (deriveGCompare, deriveGEq)
 import Data.GADT.Compare
-import Data.Dependent.Map hiding (delete)-- (DMap,DSum( (:=>) ),singleton, lookup,fromList)
+import Data.Dependent.Map hiding (delete,(\\))-- (DMap,DSum( (:=>) ),singleton, lookup,fromList)
 import Data.Text(Text,pack)
-import Data.List (delete)
+import Data.List (delete, nub, (\\))
 import Data.String.Here (here)
 import Data.Time.Clock
 import Control.Concurrent
@@ -24,7 +24,9 @@ import Data.FileEmbed
 import Lib
 import Widgets
 import Fake (fake)
+import Control.Arrow ((&&&))
 import qualified DynamicList as Dl
+import qualified PartitionSet as Ps
 
 
 maybeRight (Right x) = Just x
@@ -33,8 +35,9 @@ maybeRight _ = Nothing
 type User = Text
 type Role = Text
 type Message = Text
-                      --
+
 type State = Map Role [User]
+
 
 renderState :: MS m => State -> m (ES a)
 renderState m = divClass "state" $ do
@@ -47,7 +50,8 @@ data RolesMorph = Roling State | Roled State Role | Failed Text | Booting
 
 data Interface m = Interface {
   -- add or remove a user from a role
-  updateState :: Role -> Dl.Operation User -> m (ES (Maybe Text)),
+  addDelState :: Role -> Dl.Operation User -> m (ES (Maybe Text)),
+  moveInState :: Role -> Ps.Operation User -> m (ES (Maybe Text)),
   -- get a full state
   getState ::  m (ES (Either Text State))
   }
@@ -55,12 +59,18 @@ data Interface m = Interface {
 rolesW :: MS m
             => Interface m
             -> Source m RolesMorph State
-rolesW (Interface updateState getState) = Source core where
+rolesW (Interface addDelState moveInState getState) = Source core where
 
     usersCfg = [Dl.BackButton:=> return "revoke", Dl.UpdatingMessage :=> return "updating server..."]
-    usersW rs r = runPipe
-      (Dl.dynamicList usersCfg (updateState r))
-      (Dl.Listening (rs M.! r)) never
+    usersW us r refresh = runPipe
+      (Dl.dynamicList usersCfg (addDelState r))
+      (Dl.Listening us) refresh
+
+    partitionerCfg = [Ps.BackButton:=> return "move", Ps.UpdatingMessage :=> return "updating server..."]
+    partitionerW us r refresh = runPipe
+      (Ps.dynamicList partitionerCfg (moveInState r))
+      (Ps.Listening us) refresh
+
 
     core (Roling rs) = fmap rightG . divClass "roling" $ do
           fmap (fmap (Roled rs). leftmost) . el  "ul" . forM (M.keys rs) $ \w ->
@@ -68,16 +78,22 @@ rolesW (Interface updateState getState) = Source core where
                   (w <$) <$> button w
 
     core (Roled rs r) = divClass "roled" $ do
-        us <- do
-            el "span" $ text r
-            divClass "users" $ usersW rs r
-
-        rs' <- foldDyn (M.insert r) rs us
+        el "span" $ text r
+        let   parts :: State -> ([User],[User])
+              parts rs = let
+                  allus = nub. concat . M.elems  $ rs
+               in (id &&& (\\) allus) $ (rs M.! r)
+        rec   us <- do
+                  divClass "changer" $ do
+                    usersW (rs M.! r) r (flip (M.!) r <$> updated rs')
+              ps <- do
+                  divClass "mover" $ partitionerW (parts rs) r $ parts <$> updated rs'
+              rs' <- foldDyn (M.insert r) rs $ leftmost [us,fst <$> ps]
         toRoles <- divClass "back" $ button "^ roles"
         return . merge $ [
-          RightG :=> Roling <$> tagPromptlyDyn rs' toRoles,
-          LeftG :=> tagPromptlyDyn rs' us
-          ]
+                RightG :=> Roling <$> tagPromptlyDyn rs' toRoles,
+                LeftG :=> updated rs'
+                ]
 
     core Booting = divClass "booting" $ do
         text "collecting roles state ... "
@@ -100,11 +116,13 @@ roles = M.fromList [("Admins",["paolino","meditans"]),("Authors",["legolas","mac
   ("Commenters",["blackfirst","zanzibar"]),("Users",["marco"])]
     :: State
 
+
+
 fakeInterface :: MS m => Interface m
 fakeInterface = Interface
-  Dl.fakeUpdate
-  (fake [Left "problem getting initial state", Right roles])
-
+  (const Dl.fakeUpdate)
+  (const Ps.fakeUpdate)
+  (fake [(1,Left "problem getting initial state"),(2, Right roles)])
 
 
 main = mainWidget $ do
@@ -112,7 +130,7 @@ main = mainWidget $ do
   s <- divClass "operation" $ do
     runSource (rolesW fakeInterface) Booting
   _ <- divClass "log" $ do
-    ss <- holdDyn mempty s
+    ss <- holdDyn mempty s --
     domMorph renderState ss
   return ()
 

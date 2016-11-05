@@ -1,5 +1,8 @@
+ul {padding-left:0;}
 .listening ul{
 	list-style: none;
+	height:10em;
+	overflow:scroll;
 }
 .listening ul li button {
 	font-size: 80%;
@@ -8,15 +11,59 @@
 .inner {background-color: #eee;padding:1em;}
 
 .operation {
+	width:30em;
 	border:solid black 1px;
   padding:1em;
-  border-radius:20px
+  border-radius:6px;
+  margin-right:1em;
 }
 
 .log {
 	border:solid black 1px;
   padding:1em;
-  border-radius:20px
+  border-radius:6px;
+	height:35em;
+	
+}
+.operation{
+	height :35em;
+}
+.operation span{font-size:120%;margin:1em;}
+.changer {	
+	
+	font-size:80%;
+	border:solid black 1px;
+	height:15em;
+	border-radius:6px;
+	margin-bottom:0.5em;
+}
+.changer input {
+	margin-top :1em;
+	margin-left:1em;
+}
+.mover {font-size:80%;
+	border:solid black 1px;
+	border-radius:6px;
+	height:15em;
+	
 }
 
+.mover .listening{
+	display:flex;
+}
+.mover .left {
+	width:20em;
+}
+.mover .right {
+	flex-grow:1;
+}
+body {display:flex;}
+.log .state ul {
+	list-style: none;
+	padding-left:1em;
 
+}
+.log .state {
+		height:36em;
+	overflow:scroll;
+}
