@@ -1,0 +1,22 @@
+.listening ul{
+	list-style: none;
+}
+.listening ul li button {
+	font-size: 80%;
+}
+
+.inner {background-color: #eee;padding:1em;}
+
+.operation {
+	border:solid black 1px;
+  padding:1em;
+  border-radius:20px
+}
+
+.log {
+	border:solid black 1px;
+  padding:1em;
+  border-radius:20px
+}
+
+
