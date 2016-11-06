@@ -17,31 +17,27 @@ import Fake
 import NonTextual
 import GHC.Exts
 
-fakeUpdate :: MS m => Operation r a -> m (ES (Maybe Text))
-fakeUpdate _ = fake [(1,Just "problem updating"),(10,Nothing)]
+-- plugin logic
+class  Plugin a  where
+  data Operation a -- operations supported on (a)
+  type Use a :: Constraint -- things possible on 'a'
+  operate :: Use a => Operation a -> a -> a -- operation application
 
+type family Config  a
 
-type family Env (r :: * -> *) a :: * -> *
+--  widget to get operations
+type ListeningP m a =  Config a  -> a -> m (ES (Operation a))
+type UpdatingP m a = Config a  -> a -> Operation a -> m ()
 
-class  Plugin r a  where
-  data Operation r a -- operation supported
-  type Config r a
-  type Use r a :: Constraint -- things possible on 'a'
-  operate :: Use r a => Operation r a -> r a -> r a -- operation application
-  --  widget to get operations, the config is the 'a'
-
-type ListeningP m r a=  Config r a  -> r a -> m (ES (Operation r a))
-type UpdatingP m r a = Config r a  -> r a -> Operation r a -> m ()
-
-data State r a = Listening (r a) | Updating (r a) (Operation r a) | Problem (r a) Text
+data State a = Listening (a) | Updating (a) (Operation a) | Problem (a) Text
 
 withExternal
-  :: (MS m,  Plugin r a, Use r a)
-  => Config r a -- configuration
-  -> ListeningP m r a
-  -> UpdatingP m r a
-  -> (Operation r a -> m (ES (Maybe Text))) -- external operation, Just is error
-  -> Pipe m (State r a) (r a) (r a)
+  :: (MS m,  Plugin a, Use a)
+  => Config a -- configuration
+  -> ListeningP m a
+  -> UpdatingP m a
+  -> (Operation a -> m (ES (Maybe Text))) -- external operation, Just is error
+  -> Pipe m (State a) (a) (a)
 
 withExternal cfg listening updating external = Pipe core where
 
@@ -61,6 +57,12 @@ withExternal cfg listening updating external = Pipe core where
     return $ rightG $ Listening xs <$ b
 
   core (Left xs) =  core $ Right (Listening xs)
+
+-- simulate an external update failing once on ten
+fakeUpdate :: MS m => Operation a -> m (ES (Maybe Text))
+fakeUpdate _ = fake [(1,Just "problem updating"),(10,Nothing)]
+
+
 
 
 

@@ -1,4 +1,4 @@
-{-# language MultiParamTypeClasses, TemplateHaskell, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists, FunctionalDependencies #-}
+{-# language MultiParamTypeClasses, TemplateHaskell, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists, FunctionalDependencies, ConstraintKinds #-}
 
 module DynamicList (DynList (..), runDynListP, DynamicListCfg (..)) where
 
@@ -17,37 +17,49 @@ import Fake
 import NonTextual
 import GHC.Exts
 import ExternalPhase
+import Input
 
 data DynamicListCfg = DynamicListCfg {
-  backButton :: Text,
+  elemSelect :: Text,
   updatingMessage :: Text
-                                     }
+ }
 
+type instance Config (DynList a) = DynamicListCfg
 
 newtype DynList a = DynList {unDynList :: [a]}
 
-instance Plugin DynList a where
-  data Operation DynList a = Del a | Add a
-  type Config DynList a = DynamicListCfg
-  type Use DynList a = (Show a, CanParse a, Eq a, PrettyShow a)
+instance Plugin (DynList a) where
+  data Operation (DynList a) = Del a | Add a
+  type Use (DynList a) = Eq a
   operate (Del x) (DynList xs) = DynList (delete x xs)
   operate (Add x) (DynList xs) = DynList $ x:xs
 
+type WC a = (Show a, CanParse a, Eq a, PrettyShow a, Ord a)
+
+listening   :: (MS m, WC a)
+            => ListeningP m (DynList a)
 listening cfg (DynList (sort -> xs)) = do
-    add <- fmap canParse <$> resettable -- to be fixed with a more serious input
-    del <- fmap leftmost . el  "ul" . forM xs $ \x ->
-          el "li" $ do
-            b <- (x <$) <$> (button $ backButton cfg)
-            el "span"  $ text (prettyShow $ x)
-            return b
-    return $ leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
+  add <- fmap canParse <$> resettable True Nothing -- to be fixed with a more serious input
+  del <- fmap leftmost . el  "ul" . forM xs $ \x ->
+        el "li" $ do
+          el "span"  $ text (prettyShow $ x)
+          (x <$) <$> (button $ elemSelect cfg)
 
-updating cfg _ _ = el "span" . text $ updatingMessage cfg
 
+  return $ leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
+
+updating :: (MS m, WC a) => UpdatingP m (DynList a)
+updating cfg (DynList (sort -> xs)) _ =   do
+  _ <- resettable False (Just $ updatingMessage cfg)-- to be fixed with a more serious input
+  del <- el  "ul" . forM xs $ \x -> do
+    el "li" $ do
+      el "span"  $ text (prettyShow $ x)
+      elAttr "button" [("disabled","")] $ text $ elemSelect cfg
+  return ()
 runDynListP
-  :: (MS m, Show a, Eq a, PrettyShow a, CanParse a, Ord a)
+    :: (MS m, WC a)
     => DynamicListCfg
-    -> (Operation DynList a -> m (ES (Maybe Text)))
+    -> (Operation (DynList a) -> m (ES (Maybe Text)))
     -> DynList a
     -> ES (DynList a)
     -> m (ES (DynList a))

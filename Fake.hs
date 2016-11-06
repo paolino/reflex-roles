@@ -19,12 +19,12 @@ fromDist xs = let
 
 
 fake :: MS m => [(Int,a)] -> m (ES a)
-fake xs = getPostBuild >>= \e -> rest ((1,xs) <$e)
+fake xs = getPostBuild >>= \e -> rest ((300,xs) <$e)
 
 rest    :: MS m
         => ES (NominalDiffTime,[(Int,a)]) -- ^ delay time in seconds + value
                 -> m (ES a)
 rest e =  performEventAsync . ffor e $ \(dt,as) cb -> liftIO . void . forkIO $ do
-  threadDelay . ceiling $ dt * 1000000
+  threadDelay . ceiling $ dt * 1000
   fromDist as >>= cb
 

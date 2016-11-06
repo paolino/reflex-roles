@@ -80,15 +80,6 @@ wire (k :=> v) = wire' k v
 ------------- Lib -------------------------------------
 instance GCompare k => Semigroup (DMap k Identity) where
   (<>) = union
--- | Enter enabled input widget, just emit  the contents on return
-
-resettable :: MS m => m (ES Text)
-resettable = do
-  rec     let resettable = def & setValue .~ ("" <$) enter
-              value  = current . view textInput_value $ input
-              enter  = value `tag` keypress Enter input
-          input <- textInput resettable
-  return enter
 
 -- | delay an Event by the amount of time specified in its value and random
 -- pick from chances

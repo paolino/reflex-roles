@@ -20,15 +20,23 @@ data Partition a = Partition [a] [a]
 
 data PartitionCfg = PartitionCfg {
   updatingMessage :: Text
-                                     }
-instance Plugin Partition a where
-  data Operation Partition a = Move a
-  type Config Partition a = PartitionCfg
-  type Use Partition a = (Eq a, PrettyShow a)
+  }
+
+type instance Config (Partition a) = PartitionCfg
+
+instance Plugin (Partition a) where
+  data Operation (Partition a) = Move a
+  type Use (Partition a) = (Eq a, PrettyShow a)
   operate (Move x) (Partition xs@(elem x -> True) ys) = Partition (delete x xs) (x:ys)
   operate (Move x) (Partition xs ys) = Partition (x:xs) (delete x ys)
 
-updating cfg _ _ =  el "span" . text $ updatingMessage cfg
+updating cfg xs@(Partition (sort -> ls) (sort -> rs)) _ = do
+    divClass "left" $ el  "ul" . forM ls $ \x ->
+          el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
+
+    divClass "right" $ el  "ul" . forM rs $ \x ->
+          el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
+    return ()
 
 listening cfg xs@(Partition (sort -> ls) (sort -> rs)) = do
     ml <- divClass "left" $ fmap leftmost . el  "ul" . forM ls $ \x ->
@@ -39,12 +47,12 @@ listening cfg xs@(Partition (sort -> ls) (sort -> rs)) = do
 
     return $ Move <$> leftmost [ml,rl]
 
-runPartitionSetP :: (MS m, Use Partition a, PrettyShow a,Eq a, Ord a)
+runPartitionSetP :: (MS m, Use (Partition a), PrettyShow a,Eq a, Ord a)
       => PartitionCfg
-     -> (Operation Partition a -> m (ES (Maybe Text)))
-      -> Partition a
-     -> ES (Partition a)
-     -> m (ES (Partition a))
+     -> (Operation (Partition a) -> m (ES (Maybe Text)))
+      -> (Partition a)
+     -> ES ((Partition a))
+     -> m (ES ((Partition a)))
 
 runPartitionSetP partitionerCfg moveInState us refresh = runPipe
       (withExternal partitionerCfg listening updating moveInState)
