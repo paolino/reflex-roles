@@ -6,7 +6,7 @@ import Control.Lens (view,(.~),(&),over,ix)
 import Data.Dependent.Map (DSum( (:=>) ))
 import Data.Text(Text)
 import Data.List (delete, nub, (\\))
-import Data.Map (Map,(!),elems,insert,keys,fromList,assocs)
+import Data.Map (Map,(!),elems,insert,keys,fromList,assocs,findWithDefault)
 import Data.FileEmbed (embedStringFile)
 import Control.Arrow ((&&&))
 
@@ -29,12 +29,11 @@ type Message = Text
 type State = Map Role [User]
 
 
-renderState :: MS m => State -> m (ES a)
-renderState m = divClass "state" $ do
-    forM_ (assocs m) $ \(k,us) -> do
-      text k
-      el "ul" $ forM_ us $ el "li" . text
-    return never
+renderUsers :: MS m => State -> m (ES a)
+renderUsers m = divClass "state" $ do
+  elClass "span" "title" $ text "Users"
+  el "ul" $ forM_ (findWithDefault [] "Users" m) $ el "li" . text
+  return never
 
 data RolesMorph = Roling State | Roled State Role | Failed Text | Booting
 
@@ -131,7 +130,7 @@ main = mainWidget $ do
     runSource (rolesW fakeInterface) Booting
   _ <- divClass "log" $ do
     ss <- holdDyn mempty s --
-    domMorph renderState ss
+    domMorph renderUsers ss
   return ()
 
 
