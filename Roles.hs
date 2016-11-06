@@ -1,33 +1,23 @@
 {-# LANGUAGE RecursiveDo, GADTs, InstanceSigs ,QuasiQuotes,FlexibleInstances,TemplateHaskell, TupleSections, ScopedTypeVariables, ConstraintKinds, FlexibleContexts, OverloadedStrings,  OverloadedLists#-}
-import Reflex.Dom
-import Prelude hiding ((.),id, lookup)
+
+import Prelude hiding (lookup)
 import Control.Monad (void,forM,forM_)
-import Control.Lens (view,(.~),(&))
--- import Data.GADT.Compare
-import Data.GADT.Compare.TH (deriveGCompare, deriveGEq)
-import Data.GADT.Compare
-import Data.Dependent.Map hiding (delete,(\\))-- (DMap,DSum( (:=>) ),singleton, lookup,fromList)
-import Data.Text(Text,pack)
+import Control.Lens (view,(.~),(&),over,ix)
+import Data.Dependent.Map (DSum( (:=>) ))
+import Data.Text(Text)
 import Data.List (delete, nub, (\\))
-import Data.String.Here (here)
-import Data.Time.Clock
-import Control.Concurrent
-import Control.Monad.Trans
-import System.Random
-import Data.Either
-import Control.Monad.Identity
-import qualified Data.Map as M
-import Data.Map (Map)
-import Data.Semigroup
-import Control.Category
-import Data.FileEmbed
-import Lib
-import Widgets
-import Fake (fake)
+import Data.Map (Map,(!),elems,insert,keys,fromList,assocs)
+import Data.FileEmbed (embedStringFile)
 import Control.Arrow ((&&&))
-import qualified DynamicList as Dl
-import qualified PartitionSet as Ps
-import qualified ExternalPhase as Ex
+
+import Fake (fake)
+import DynamicList (runDynListP,DynList(..),DynamicListCfg (..))
+import PartitionSet  (runPartitionSetP , Partition(..), PartitionCfg(..))
+import Widgets (Source(..), runSource)
+import ExternalPhase (Operation,fakeUpdate)
+
+import Lib (MS,ES, domMorph, EitherG(LeftG,RightG), rightG)
+import Reflex.Dom
 
 maybeRight (Right x) = Just x
 maybeRight _ = Nothing
@@ -41,7 +31,7 @@ type State = Map Role [User]
 
 renderState :: MS m => State -> m (ES a)
 renderState m = divClass "state" $ do
-    forM_ (M.assocs m) $ \(k,us) -> do
+    forM_ (assocs m) $ \(k,us) -> do
       text k
       el "ul" $ forM_ us $ el "li" . text
     return never
@@ -50,43 +40,51 @@ data RolesMorph = Roling State | Roled State Role | Failed Text | Booting
 
 data Interface m = Interface {
   -- add or remove a user from a role
-  addDelState :: Role -> Dl.Operation Dl.DynList User -> m (ES (Maybe Text)),
-  moveInState :: Role -> Ps.Operation Ps.Partition User -> m (ES (Maybe Text)),
+  addDelState :: Role -> Operation DynList User -> m (ES (Maybe Text)),
+  -- flag a user in a role
+  moveInState :: Role -> Operation Partition User -> m (ES (Maybe Text)),
   -- get a full state
   getState ::  m (ES (Either Text State))
   }
+
+parts :: Role -> State -> Partition User
+parts r rs = uncurry Partition . (id &&& (\\) (rs ! "Users")) $ (rs ! r)
+
+specialCase :: Role -> [User] -> State -> State
+specialCase "Users" us = fmap $ filter (`elem` us)
+specialCase _ us = over (ix "Users") $ \us' -> us ++ (us' \\ us)
 
 rolesW :: (MS m)
             => Interface m
             -> Source m RolesMorph State
 rolesW (Interface addDelState moveInState getState) = Source core where
 
-    usersCfg = Dl.DynamicListCfg "revoke" "updating server..."
-    usersW r = Dl.runDynListP usersCfg (addDelState r)
+    usersCfg = DynamicListCfg "revoke" "updating server..."
 
-    partitionerCfg = Ps.PartitionCfg "move" "updating server..."
-    partitionerW r  = Ps.runPartitionSetP partitionerCfg (moveInState r)
+    partitionerCfg = PartitionCfg "updating server..."
 
     core (Roling rs) = fmap rightG . divClass "roling" $ do
-          fmap (fmap (Roled rs). leftmost) . el  "ul" . forM (M.keys rs) $ \w ->
+          fmap (fmap (Roled rs). leftmost) . el  "ul" . forM (keys rs) $ \w ->
                 el "li" $ do
                   (w <$) <$> button w
 
     core (Roled rs r) = divClass "roled" $ do
         el "span" $ text r
-        let   parts :: State -> Ps.Partition User
-              parts rs = let
-                  allus = nub. concat . M.elems  $ rs
-               in uncurry Ps.Partition . (id &&& (\\) allus) $ (rs M.! r)
 
-        rec   us <- (Dl.unDynList <$>) <$> do
-                    divClass "changer" $ do
-                      usersW r (Dl.DynList $ rs M.! r) (Dl.DynList <$> flip (M.!) r <$> updated rs')
+        rec   us <- (unDynList <$>) <$> do
+                    divClass "changer" $
+                      runDynListP usersCfg (addDelState r) (DynList $
+                        rs ! r) (DynList <$> flip (!) r <$> updated rs')
 
-              ps <- do
-                divClass "mover" $ partitionerW r (parts rs) $ parts <$> updated rs'
+              ps <- if r /= "Users" then  divClass "mover" $
+                runPartitionSetP partitionerCfg (moveInState r) (parts r rs) $
+                        parts r <$> updated rs'
+                    else return never
 
-              rs' <- foldDyn (M.insert r) rs $ leftmost [us,(\(Ps.Partition xs _) -> xs) <$> ps]
+              rs' <- foldDyn (\(f,us) -> insert r us . f) rs $
+                leftmost [(specialCase r &&& id) <$> us,
+                          (const id &&& id) <$> (\(Partition xs _) -> xs) <$> ps
+                         ]
 
         toRoles <- divClass "back" $ button "^ roles"
         return . merge $ [
@@ -111,16 +109,19 @@ css = $(embedStringFile "./roles.css")
 
 ---------------------  simulation ----------------------
 
-roles = M.fromList [("Admins",["paolino","meditans"]),("Authors",["legolas","machupichu"]),
-  ("Commenters",["blackfirst","zanzibar"]),("Users",["marco"])]
-    :: State
+roles =[("Admins",["paolino","meditans"]),("Authors",["legolas","machupichu"]),
+  ("Commenters",["blackfirst","zanzibar","marco"])]
+    :: [(Role,[User])]
+
+fixRoles rs = fromList $ r:rs where
+  r = ("Users", nub . concat . map snd  $ rs)
 
 
 fakeInterface :: MS m => Interface m
 fakeInterface = Interface
-  (const Ex.fakeUpdate)
-  (const Ex.fakeUpdate)
-  (fake [(1,Left "problem getting initial state"),(2, Right roles)])
+  (const fakeUpdate)
+  (const fakeUpdate)
+  (fake [(1,Left "problem getting initial state"),(2, Right $ fixRoles roles)])
 
 
 main = mainWidget $ do

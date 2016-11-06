@@ -1,9 +1,9 @@
 {-# language MultiParamTypeClasses, TemplateHaskell, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists, FunctionalDependencies #-}
 
-module DynamicList where
+module DynamicList (DynList (..), runDynListP, DynamicListCfg (..)) where
 
 import Data.Text (Text,pack,unpack)
-import Data.List (delete)
+import Data.List (delete,sort)
 import Data.Dependent.Map (DMap , DSum ((:=>)),fromList,(!))
 import Data.GADT.Compare.TH
 import Data.GADT.Compare
@@ -33,18 +33,19 @@ instance Plugin DynList a where
   operate (Del x) (DynList xs) = DynList (delete x xs)
   operate (Add x) (DynList xs) = DynList $ x:xs
 
-listening cfg (DynList xs) = do
+listening cfg (DynList (sort -> xs)) = do
     add <- fmap canParse <$> resettable -- to be fixed with a more serious input
     del <- fmap leftmost . el  "ul" . forM xs $ \x ->
           el "li" $ do
+            b <- (x <$) <$> (button $ backButton cfg)
             el "span"  $ text (prettyShow $ x)
-            (x <$) <$> (button $ backButton cfg)
+            return b
     return $ leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
 
 updating cfg _ _ = el "span" . text $ updatingMessage cfg
 
 runDynListP
-    :: (MS m, Show a, Eq a, PrettyShow a, CanParse a)
+  :: (MS m, Show a, Eq a, PrettyShow a, CanParse a, Ord a)
     => DynamicListCfg
     -> (Operation DynList a -> m (ES (Maybe Text)))
     -> DynList a

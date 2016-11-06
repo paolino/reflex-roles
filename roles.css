@@ -1,8 +1,16 @@
+.mover button {padding:0;color:blue;background-color:transparent;border:none}
+.changer button {padding:0;color:blue;background-color:transparent;border:none}
+
 ul {padding-left:0;}
 .listening ul{
 	list-style: none;
 	height:10em;
 	overflow:scroll;
+	
+}
+.changer ul {
+		margin-left:1em;
+
 }
 .listening ul li button {
 	font-size: 80%;
@@ -41,7 +49,7 @@ ul {padding-left:0;}
 	margin-top :1em;
 	margin-left:1em;
 }
-.mover {font-size:80%;
+.mover {
 	border:solid black 1px;
 	border-radius:6px;
 	height:15em;
@@ -53,6 +61,7 @@ ul {padding-left:0;}
 }
 .mover .left {
 	width:20em;
+	margin-left:1em;
 }
 .mover .right {
 	flex-grow:1;

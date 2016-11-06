@@ -1,9 +1,9 @@
 {-# language TemplateHaskell, MultiParamTypeClasses, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists #-}
 
-module PartitionSet where
+module PartitionSet (runPartitionSetP, Partition (..), PartitionCfg (..)) where
 
 import Data.Text (Text,pack,unpack)
-import Data.List (delete)
+import Data.List (delete,sort)
 import Data.Dependent.Map (DMap , DSum ((:=>)),fromList,(!))
 import Data.GADT.Compare.TH
 import Control.Monad (forM)
@@ -19,7 +19,6 @@ import ExternalPhase
 data Partition a = Partition [a] [a]
 
 data PartitionCfg = PartitionCfg {
-  backButton :: Text,
   updatingMessage :: Text
                                      }
 instance Plugin Partition a where
@@ -31,20 +30,16 @@ instance Plugin Partition a where
 
 updating cfg _ _ =  el "span" . text $ updatingMessage cfg
 
-listening cfg xs@(Partition ls rs) = do
+listening cfg xs@(Partition (sort -> ls) (sort -> rs)) = do
     ml <- divClass "left" $ fmap leftmost . el  "ul" . forM ls $ \x ->
-          el "li" $ do
-            el "span"  $ text (prettyShow $ x)
-            (x <$) <$> (button $ backButton cfg)
+          el "li" $ (x <$) <$> (button $ prettyShow $ x)
 
     rl <- divClass "right" $ fmap leftmost . el  "ul" . forM rs $ \x ->
-          el "li" $ do
-            el "span"  $ text (prettyShow $ x)
-            (x <$) <$> (button $ backButton cfg)
+            el "li" $ (x <$) <$> (button $ prettyShow $ x )
 
     return $ Move <$> leftmost [ml,rl]
 
-runPartitionSetP :: (MS m, Use Partition a, PrettyShow a,Eq a)
+runPartitionSetP :: (MS m, Use Partition a, PrettyShow a,Eq a, Ord a)
       => PartitionCfg
      -> (Operation Partition a -> m (ES (Maybe Text)))
       -> Partition a
@@ -54,4 +49,4 @@ runPartitionSetP :: (MS m, Use Partition a, PrettyShow a,Eq a)
 runPartitionSetP partitionerCfg moveInState us refresh = runPipe
       (withExternal partitionerCfg listening updating moveInState)
       (Listening us) refresh
-
+--
