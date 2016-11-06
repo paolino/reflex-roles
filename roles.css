@@ -1,6 +1,12 @@
-.mover button {padding:0;color:blue;background-color:transparent;border:none}
-.changer button {padding:0;color:blue;background-color:transparent;border:none}
-
+button {font-size:100%;padding:0;color:blue;background-color:transparent;border:none}
+.changer button {font-size:80%;margin:0em;padding:0;color:blue;background-color:transparent;border:none}
+.roled .title {padding-left:10em;
+	font-size: 120%;
+	font-style:oblique;
+	display:block;
+	margin:0;
+	margin-bottom:1em;
+}
 ul {padding-left:0;}
 .listening ul{
 	list-style: none;
@@ -13,7 +19,6 @@ ul {padding-left:0;}
 
 }
 .listening ul li button {
-	font-size: 80%;
 }
 
 .inner {background-color: #eee;padding:1em;}
@@ -36,10 +41,8 @@ ul {padding-left:0;}
 .operation{
 	height :35em;
 }
-.operation span{font-size:120%;margin:1em;}
+.operation span{margin:1em;}
 .changer {	
-	
-	font-size:80%;
 	border:solid black 1px;
 	height:15em;
 	border-radius:6px;

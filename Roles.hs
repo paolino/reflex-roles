@@ -69,7 +69,7 @@ rolesW (Interface addDelState moveInState getState) = Source core where
                   (w <$) <$> button w
 
     core (Roled rs r) = divClass "roled" $ do
-        el "span" $ text r
+        elClass "span" "title" $ text r
 
         rec   us <- (unDynList <$>) <$> do
                     divClass "changer" $
@@ -99,6 +99,7 @@ rolesW (Interface addDelState moveInState getState) = Source core where
           RightG :=> either Failed Roling <$> e,
           LeftG :=> fmapMaybe maybeRight e
           ]
+
 
     core (Failed t) = divClass "failed" $ do
       text t
