@@ -9,7 +9,7 @@ import Data.Dependent.Map
 import Control.Monad.Identity
 
 -- a source widget
-newtype Source m s b = Source (s -> m (Plug (EitherG b s)))
+newtype Source m s b = Source (s -> m (Cable (EitherG b s)))
 
 runSource :: MS m => Source m s b -> s -> m (ES b)
 runSource (Source w) s0 = do
@@ -18,7 +18,7 @@ runSource (Source w) s0 = do
   return $ select r LeftG
 
 -- an arrow widget
-newtype Pipe m s a b = Pipe (Either a s -> m (Plug (EitherG b s)))
+newtype Pipe m s a b = Pipe (Either a s -> m (Cable (EitherG b s)))
 
 runPipe :: MS m => Pipe m s a b -> s -> ES a -> m (ES b)
 runPipe (Pipe w) s0 ea = do

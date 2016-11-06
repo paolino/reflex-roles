@@ -67,3 +67,9 @@ body {display:flex;}
 		height:36em;
 	overflow:scroll;
 }
+.operation .roling ul {
+	list-style: none;
+}
+.operation .roling ul li {
+	margin:0.5em;
+}

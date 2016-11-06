@@ -1,4 +1,4 @@
-{-# language TemplateHaskell, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists #-}
+{-# language MultiParamTypeClasses, TemplateHaskell, FlexibleContexts, ViewPatterns, GADTs, OverloadedStrings, TypeFamilies, FlexibleInstances, OverloadedLists, FunctionalDependencies #-}
 
 module DynamicList where
 
@@ -6,59 +6,53 @@ import Data.Text (Text,pack,unpack)
 import Data.List (delete)
 import Data.Dependent.Map (DMap , DSum ((:=>)),fromList,(!))
 import Data.GADT.Compare.TH
+import Data.GADT.Compare
 import Control.Monad (forM)
 import Data.Maybe -- (isNothing)
 
-import Widgets (Pipe(Pipe))
+import Widgets (Pipe(Pipe), runPipe)
 import Lib
 import Reflex.Dom
 import Fake
 import NonTextual
+import GHC.Exts
+import ExternalPhase
 
-fakeUpdate :: MS m => Operation a -> m (ES (Maybe Text))
-fakeUpdate _ = fake [(1,Just "problem updating"),(10,Nothing)]
+data DynamicListCfg = DynamicListCfg {
+  backButton :: Text,
+  updatingMessage :: Text
+                                     }
 
-data Operation a = Del a | Add a
 
-operate (Del x) = delete x
-operate (Add x) = (:) x
+newtype DynList a = DynList {unDynList :: [a]}
 
-data State a = Listening [a] | Updating [a] (Operation a) | Problem [a] Text
+instance Plugin DynList a where
+  data Operation DynList a = Del a | Add a
+  type Config DynList a = DynamicListCfg
+  type Use DynList a = (Show a, CanParse a, Eq a, PrettyShow a)
+  operate (Del x) (DynList xs) = DynList (delete x xs)
+  operate (Add x) (DynList xs) = DynList $ x:xs
 
-data DynamicListCfg a where
-  BackButton :: DynamicListCfg Text
-  UpdatingMessage :: DynamicListCfg Text
-
-deriveGEq ''DynamicListCfg
-deriveGCompare ''DynamicListCfg
-
-dynamicList  :: (MS m, Show a, CanParse a, Eq a, PrettyShow a)
-        => DMap DynamicListCfg m -- text for delete button
-        -> (Operation a -> m (ES (Maybe Text))) -- external operation, Just is error
-        -> Pipe m (State a) [a] [a]
-
-dynamicList  ((!) -> cfg)  external = Pipe core where
-
-  core (Right (Listening xs)) = divClass "listening" $ do
+listening cfg (DynList xs) = do
     add <- fmap canParse <$> resettable -- to be fixed with a more serious input
     del <- fmap leftmost . el  "ul" . forM xs $ \x ->
           el "li" $ do
             el "span"  $ text (prettyShow $ x)
-            (x <$) <$> (cfg BackButton >>= button)
-    return . rightG $ Updating xs <$> leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
+            (x <$) <$> (button $ backButton cfg)
+    return $ leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
 
-  core (Right (Updating xs op)) = divClass "updating" $ do
-    cfg UpdatingMessage >>= (el "span" . text)
-    r <- external op
-    let xs' = operate op xs
-    return . merge $ [
-        RightG :=> maybe (Listening xs') (Problem xs) <$> r ,
-        LeftG :=> xs' <$ ffilter isNothing r
-        ]
-  core (Right (Problem xs t)) = divClass "problem" $ do
-    el "span" $ text t
-    b <- button "Got it"
-    return $ rightG $ Listening xs <$ b
+updating cfg _ _ = el "span" . text $ updatingMessage cfg
 
-  core (Left xs) =  core $ Right (Listening xs)
+runDynListP
+    :: (MS m, Show a, Eq a, PrettyShow a, CanParse a)
+    => DynamicListCfg
+    -> (Operation DynList a -> m (ES (Maybe Text)))
+    -> DynList a
+    -> ES (DynList a)
+    -> m (ES (DynList a))
+runDynListP usersCfg addDelState us refresh = runPipe
+      (withExternal usersCfg listening updating addDelState)
+      (Listening us) refresh
+
+
 

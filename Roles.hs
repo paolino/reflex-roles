@@ -27,7 +27,7 @@ import Fake (fake)
 import Control.Arrow ((&&&))
 import qualified DynamicList as Dl
 import qualified PartitionSet as Ps
-
+import qualified ExternalPhase as Ex
 
 maybeRight (Right x) = Just x
 maybeRight _ = Nothing
@@ -50,27 +50,22 @@ data RolesMorph = Roling State | Roled State Role | Failed Text | Booting
 
 data Interface m = Interface {
   -- add or remove a user from a role
-  addDelState :: Role -> Dl.Operation User -> m (ES (Maybe Text)),
-  moveInState :: Role -> Ps.Operation User -> m (ES (Maybe Text)),
+  addDelState :: Role -> Dl.Operation Dl.DynList User -> m (ES (Maybe Text)),
+  moveInState :: Role -> Ps.Operation Ps.Partition User -> m (ES (Maybe Text)),
   -- get a full state
   getState ::  m (ES (Either Text State))
   }
 
-rolesW :: MS m
+rolesW :: (MS m)
             => Interface m
             -> Source m RolesMorph State
 rolesW (Interface addDelState moveInState getState) = Source core where
 
-    usersCfg = [Dl.BackButton:=> return "revoke", Dl.UpdatingMessage :=> return "updating server..."]
-    usersW us r refresh = runPipe
-      (Dl.dynamicList usersCfg (addDelState r))
-      (Dl.Listening us) refresh
+    usersCfg = Dl.DynamicListCfg "revoke" "updating server..."
+    usersW r = Dl.runDynListP usersCfg (addDelState r)
 
-    partitionerCfg = [Ps.BackButton:=> return "move", Ps.UpdatingMessage :=> return "updating server..."]
-    partitionerW us r refresh = runPipe
-      (Ps.dynamicList partitionerCfg (moveInState r))
-      (Ps.Listening us) refresh
-
+    partitionerCfg = Ps.PartitionCfg "move" "updating server..."
+    partitionerW r  = Ps.runPartitionSetP partitionerCfg (moveInState r)
 
     core (Roling rs) = fmap rightG . divClass "roling" $ do
           fmap (fmap (Roled rs). leftmost) . el  "ul" . forM (M.keys rs) $ \w ->
@@ -79,16 +74,20 @@ rolesW (Interface addDelState moveInState getState) = Source core where
 
     core (Roled rs r) = divClass "roled" $ do
         el "span" $ text r
-        let   parts :: State -> ([User],[User])
+        let   parts :: State -> Ps.Partition User
               parts rs = let
                   allus = nub. concat . M.elems  $ rs
-               in (id &&& (\\) allus) $ (rs M.! r)
-        rec   us <- do
-                  divClass "changer" $ do
-                    usersW (rs M.! r) r (flip (M.!) r <$> updated rs')
+               in uncurry Ps.Partition . (id &&& (\\) allus) $ (rs M.! r)
+
+        rec   us <- (Dl.unDynList <$>) <$> do
+                    divClass "changer" $ do
+                      usersW r (Dl.DynList $ rs M.! r) (Dl.DynList <$> flip (M.!) r <$> updated rs')
+
               ps <- do
-                  divClass "mover" $ partitionerW (parts rs) r $ parts <$> updated rs'
-              rs' <- foldDyn (M.insert r) rs $ leftmost [us,fst <$> ps]
+                divClass "mover" $ partitionerW r (parts rs) $ parts <$> updated rs'
+
+              rs' <- foldDyn (M.insert r) rs $ leftmost [us,(\(Ps.Partition xs _) -> xs) <$> ps]
+
         toRoles <- divClass "back" $ button "^ roles"
         return . merge $ [
                 RightG :=> Roling <$> tagPromptlyDyn rs' toRoles,
@@ -117,11 +116,10 @@ roles = M.fromList [("Admins",["paolino","meditans"]),("Authors",["legolas","mac
     :: State
 
 
-
 fakeInterface :: MS m => Interface m
 fakeInterface = Interface
-  (const Dl.fakeUpdate)
-  (const Ps.fakeUpdate)
+  (const Ex.fakeUpdate)
+  (const Ex.fakeUpdate)
   (fake [(1,Left "problem getting initial state"),(2, Right roles)])
 
 

@@ -60,7 +60,7 @@ type BS = Behavior Spider
 -------------- Dom + spider synonyms
 
 type MS = MonadWidget Spider
-type Plug a = ES (DMap a Identity)
+type Cable a = ES (DMap a Identity)
 
 -- specialized mapMorph for the Dom host
 domMorph ::     MonadWidget t m
@@ -69,11 +69,11 @@ domMorph ::     MonadWidget t m
                 -> m (Event t b)         -- signal the happened rewriting
 domMorph = mapMorph dyn
 
--------------- create a Plug ----------
-mergeDSums :: GCompare a => [DSum a ES] -> Plug a
+-------------- create a Cable ----------
+mergeDSums :: GCompare a => [DSum a ES] -> Cable a
 mergeDSums = merge . DMap.fromList
 
-wire' :: (GCompare k) => k v -> ES v -> Plug k
+wire' :: (GCompare k) => k v -> ES v -> Cable k
 wire' x = merge . singleton x
 
 wire (k :=> v) = wire' k v
