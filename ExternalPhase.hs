@@ -37,7 +37,8 @@ withExternal
   -> ListeningP m a
   -> UpdatingP m a
   -> (Operation a -> m (ES (Maybe Text))) -- external operation, Just is error
-  -> Pipe m (State a) (a) (a)
+  -> Pipe m (a) (a) (State a)
+
 
 withExternal cfg listening updating external = Pipe core where
 

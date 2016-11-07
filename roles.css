@@ -1,116 +1,122 @@
-ul {margin:0}
-button {font-size:100%;padding:0;color:blue;background-color:transparent;border:none}
-.changer .listening button:disabled{color:gray;}
-.mover button:disabled{color:gray;}
-.changer button {font-size:80%;margin:0em;padding:0;color:blue;background-color:transparent;border:none}
-.back button{float:right;font-size:120%;color:#7a7;border:solid #7a7 1px;border-radius:2px;padding-right:0.2em;padding-left:0.2em}
-.roled .title {
-	float:left;
-	text-decoration:underline;
-	font-size: 120%;
-	font-style:oblique;
-	display:block;
-	margin:0;
-	margin-bottom:1em;
-}
-.changer .listening{
-	margin-right:1em
-}
-ul {padding-left:0;}
-.listening ul{
-	list-style: none;
 
-}
-.changer .listening ul{
-	list-style: none;
-	height:10em;
-	overflow:scroll;
-	
-}
-.changer ul {
-		margin-left:0.5em;
-
-}
-.changer button{
+body{
+	font-family:cantarell;
+  display:flex;
+	border-bottom:solid gray 1px;
+	height:31em;
 	margin:0;
 }
+ul {
+  margin:0;
+	list-style: none;
+  padding:0;
+}
 
-.inner {background-color: #eee;padding:1em;}
+button {
+  font-size:100%;
+  padding:0;
+  color:#55e;
+  background-color:transparent;
+  border:none
+  }
+button:disabled{
+  color:gray;
+  }
 
 .operation {
-
-  padding:0.3em;
-  
+  /*! padding:0.3em; */  
   margin-right:0.5em;
+	height :31em;
+	width:70%;
+	overflow: scroll;
 }
 
+.operation .roling li {
+	margin:0.5em;
+}
+.operation .back button{
+  display:inline;
+	margin-left:0.2em;
+	font-size:145%;
+	border-radius:2px;
+	padding-left:0em
+}
+.operation .back{
+  display:inline;
+}
+
+.operation .roled .title {	
+	font-size: 120%;
+	font-style:;
+	display:inline;
+	margin:0;
+	margin-left:1em;
+}
 .log {
 	border-left:solid gray 1px;
   padding:0.3em;
-	height:33em;
+	height:30em;
 	
 }
-.operation{
-	height :33em;
+.log .state ul {
+	padding-left:1em;
 }
-.operation span{margin:0em;}
+.log .state {
+	height:38em;
+	font-size:80%;
+	overflow:scroll;
+}
+
 .changer {	
-	border-bottom:solid lightgray 1px;
-	height:15em;
+	border-bottom:solid gray 1px;
+	padding:0.2em;
 
+	height:13em;
+	
 }
-.changer input {
-	margin-top :0em;
-	margin-left:0.5em;
+
+.changer button {
+  font-size:80%;
+  }
+
+.changer ul {
+	margin-top:0.5em;
+	margin-left:0.3em;
+	font-size:85%;
+	height:12.5em;
+	overflow:scroll;
+	padding-left:0em;
+	
 }
+
 .mover {
-	border-bottom:solid lightgray 1px;
-	padding-bottom:0.5em;
-	padding-top:0.5em;
-
-	height:15em;
+	
+	height:;
 	font-size:90%;
+		padding:0.2em;
+
+	
 }
 
 .mover .listening {
 	display:flex;
-}
-.mover ul{
-		height:15em;
-    overflow:scroll;
-
+	margin-top:0.2em;
 }
 .mover .updating{
 	display:flex;
+	margin-top:0.2em;
+}
+.mover ul{
+		height:15.5em;
+    overflow:scroll;
+    margin:0;
 }
 .mover .left {
-	margin-left:0.5em;
-	padding-right:0.5em;
-	border-right:solid lightgray 3px;
-	
+	border-right:solid lightgray 1px;
+	width:50%;
 }
-
 .mover .right {
 	flex-grow:1;
-	margin-left:0.5em;
+	margin-left:0em;
 }
-body {display:flex;}
-.log .state ul {
-	list-style: none;
-	padding-left:1em;
 
-}
-.log .state {
-		height:36em;
-	font-size:80%;
-	overflow:scroll;
-}
-.operation .roling ul {
-	list-style: none;
-}
-.operation .roling ul li {
-	margin:0.5em;
-}
-.operation .updating ul{
-	list-style:none;
-}

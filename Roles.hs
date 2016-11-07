@@ -3,7 +3,8 @@
 import Prelude hiding (lookup)
 import Control.Monad (void,forM,forM_)
 import Control.Lens (view,(.~),(&),over,ix, preview, _Right)
-import Data.Dependent.Map (DSum( (:=>) ))
+--import Data.Dependent.Map (DSum( (:=>) ))
+import Data.Dependent.Map hiding (insert,(!),keys,(\\), findWithDefault, map,fromList)
 import Data.Text(Text)
 import Data.List (delete, nub, (\\), sort)
 import Data.Map (Map,(!),elems,insert,keys,fromList,assocs,findWithDefault)
@@ -15,14 +16,14 @@ import DynamicList (runDynListP,DynList(..),DynamicListCfg (..))
 import PartitionSet  (runPartitionSetP , Partition(..), PartitionCfg(..))
 import Widgets (Source(..), runSource)
 import ExternalPhase (Operation,fakeUpdate)
+import Control.Monad.Identity
 
-import Lib (MS,ES, domMorph, EitherG(LeftG,RightG), rightG)
+import Lib (MS,ES, Message, domMorph, EitherG(LeftG,RightG), rightG,leftG, Cable,sselect)
 import Reflex.Dom
 
 
 type User = Text
 type Role = Text
-type Message = Text
 
 type State = Map Role [User]
 
@@ -57,7 +58,7 @@ specialCase _ us = over (ix allUsers) $ \us' -> us ++ (us' \\ us)
 
 rolesW :: (MS m)
             => Interface m
-            -> Source m RolesMorph State
+            -> Source m (Message (EitherG State Role)) RolesMorph
 rolesW (Interface addDelState moveInState getState) = Source core where
 
     usersCfg = DynamicListCfg "(revoke)" "updating server..."
@@ -70,9 +71,9 @@ rolesW (Interface addDelState moveInState getState) = Source core where
                   (w <$) <$> button w
 
     core (Roled rs r) = divClass "roled" $ do
-        elClass "span" "title" $ text r
         toRoles <- divClass "back" $ button "\x2630"
-
+        divClass "title" $ text r
+        edit <- fmap (r <$) . divClass "edit" $ button "\x270e"
         rec   us <- (unDynList <$>) <$> do
                     divClass "changer" $
                       runDynListP usersCfg (addDelState r) (DynList $
@@ -90,7 +91,8 @@ rolesW (Interface addDelState moveInState getState) = Source core where
 
         return . merge $ [
                 RightG :=> Roling <$> tagPromptlyDyn rs' toRoles,
-                LeftG :=> updated rs'
+                LeftG :=> leftG(updated rs'),
+                LeftG :=> rightG edit
                 ]
 
     core Booting = divClass "booting" $ do
@@ -98,7 +100,7 @@ rolesW (Interface addDelState moveInState getState) = Source core where
         e <- getState
         return . merge $ [
           RightG :=> either Failed Roling <$> e,
-          LeftG :=> fmapMaybe (preview _Right) e
+          LeftG :=> leftG (fmapMaybe (preview _Right) e)
           ]
 
 
@@ -109,6 +111,7 @@ rolesW (Interface addDelState moveInState getState) = Source core where
 
 css = $(embedStringFile "./roles.css")
 
+
 ---------------------  simulation ----------------------
 
 roles =[("Admins",["paolino","meditans"]),("Authors",["legolas","machupichu"]),
@@ -117,7 +120,6 @@ roles =[("Admins",["paolino","meditans"]),("Authors",["legolas","machupichu"]),
 
 fixRoles rs = fromList $ r:rs where
   r = (allUsers, nub . concat . map snd  $ rs)
-
 
 fakeInterface :: MS m => Interface m
 fakeInterface = Interface
@@ -128,11 +130,11 @@ fakeInterface = Interface
 
 main = mainWidget $ do
   el "style" $ text $ css
-  s <- divClass "operation" $ do
+  s <- fmap fan . divClass "operation" $ do
     runSource (rolesW fakeInterface) Booting
   _ <- divClass "log" $ do
-    ss <- holdDyn mempty s --
-    domMorph renderUsers ss
+    ss <- holdDyn mempty $ sselect LeftG s
+    domMorph renderUsers $ ss
   return ()
 
 

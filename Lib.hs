@@ -50,7 +50,7 @@ gateWith f = attachWithMaybe $ \allow a -> if f allow then Just a else Nothing
 
 pair x = leftmost . (: [x])
 
-
+sselect = flip select
 ------------- Spider synonims
 
 type ES = Event Spider
@@ -60,7 +60,8 @@ type BS = Behavior Spider
 -------------- Dom + spider synonyms
 
 type MS = MonadWidget Spider
-type Cable a = ES (DMap a Identity)
+type Message a = DMap a Identity
+type Cable a = ES (Message a)
 
 -- specialized mapMorph for the Dom host
 domMorph ::     MonadWidget t m
