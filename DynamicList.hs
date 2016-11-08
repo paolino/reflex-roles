@@ -15,9 +15,10 @@ import Lib
 import Reflex.Dom
 import Fake
 import NonTextual
-import GHC.Exts
 import ExternalPhase
 import Input
+import Data.Foldable
+import qualified Data.Set as S
 
 data DynamicListCfg = DynamicListCfg {
   elemSelect :: Text,
@@ -26,19 +27,19 @@ data DynamicListCfg = DynamicListCfg {
 
 type instance Config (DynList a) = DynamicListCfg
 
-newtype DynList a = DynList {unDynList :: [a]}
+newtype DynList a = DynList {unDynList :: S.Set a}
 
 instance Plugin (DynList a) where
   data Operation (DynList a) = Del a | Add a
-  type Use (DynList a) = Eq a
-  operate (Del x) (DynList xs) = DynList (delete x xs)
-  operate (Add x) (DynList xs) = DynList $ x:xs
+  type Use (DynList a) = Ord a
+  operate (Del x) (DynList xs) = DynList (S.delete x xs)
+  operate (Add x) (DynList xs) = DynList $ S.insert x xs
 
 type WC a = (Show a, CanParse a, Eq a, PrettyShow a, Ord a)
 
 listening   :: (MS m, WC a)
             => ListeningP m (DynList a)
-listening cfg (DynList (sort -> xs)) = do
+listening cfg (DynList (toList -> xs)) = do
   add <- fmap canParse <$> resettable True Nothing -- to be fixed with a more serious input
   del <- fmap leftmost . el  "ul" . forM xs $ \x ->
         el "li" $ do
@@ -49,7 +50,7 @@ listening cfg (DynList (sort -> xs)) = do
   return $ leftmost [Del <$> del, Add <$> fromJust <$> ffilter isJust add]
 
 updating :: (MS m, WC a) => UpdatingP m (DynList a)
-updating cfg (DynList (sort -> xs)) _ =   do
+updating cfg (DynList (toList -> xs)) _ =   do
   _ <- resettable False (Just $ updatingMessage cfg)-- to be fixed with a more serious input
   del <- el  "ul" . forM xs $ \x -> do
     el "li" $ do

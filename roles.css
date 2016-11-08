@@ -1,4 +1,4 @@
-
+.edit{display: inline}
 body{
 	font-family:cantarell;
   display:flex;
@@ -45,7 +45,7 @@ button:disabled{
   display:inline;
 }
 
-.operation .roled .title {	
+.operation .title {	
 	font-size: 120%;
 	font-style:;
 	display:inline;

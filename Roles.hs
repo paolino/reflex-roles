@@ -4,8 +4,8 @@ import Prelude hiding (lookup)
 import Control.Monad (void,forM,forM_)
 import Control.Lens (view,(.~),(&),over,ix, preview, _Right)
 --import Data.Dependent.Map (DSum( (:=>) ))
-import Data.Dependent.Map hiding (insert,(!),keys,(\\), findWithDefault, map,fromList)
-import Data.Text(Text)
+import Data.Dependent.Map hiding (insert,(!),keys,(\\), findWithDefault, map,fromList, toList)
+import Data.Text(Text, pack)
 import Data.List (delete, nub, (\\), sort)
 import Data.Map (Map,(!),elems,insert,keys,fromList,assocs,findWithDefault)
 import Data.FileEmbed (embedStringFile)
@@ -18,26 +18,37 @@ import Widgets (Source(..), runSource)
 import ExternalPhase (Operation,fakeUpdate)
 import Control.Monad.Identity
 
-import Lib (MS,ES, Message, domMorph, EitherG(LeftG,RightG), rightG,leftG, Cable,sselect)
-import Reflex.Dom
-
+import Lib (MS,ES,DS, Message, domMorph, EitherG(LeftG,RightG), rightG,leftG, Cable,sselect)
+import Reflex.Dom hiding (Delete, Insert, Link)
+import Model hiding (Operation)
+import Data.Set (Set)
+import qualified Data.Set as S
+---- app specific --
+import Concept
+import Data.Foldable
+import Debug.Trace
 
 type User = Text
 type Role = Text
 
-type State = Map Role [User]
 
--- the bucket for all users
-allUsers = "Users" :: Role
+type State = Knowledge Concept
+
+-- parts :: Role -> State -> Partition User
+parts elems roleElems r k = let
+  us =  roleElems r k
+  in Partition us (elems k S.\\ us)
+
+
 
 -- renders just the allUsers key
 renderUsers :: (MS m) => State -> m (ES a)
-renderUsers m = divClass "state" $ do
-  elClass "span" "title" $ text allUsers
-  el "ul" $ forM_ (sort $ findWithDefault [] allUsers m) $ el "li" . text
+renderUsers k = divClass "state" $ do
+  elClass "span" "title" $ text "User list"
+  trace (show $ users k) $ el "ul" $ forM_ (toList $ users k) $ el "li" . text
   return never
 
-data RolesMorph = Roling State | Roled State Role | Failed Text | Booting
+data RolesMorph = Roling State | Roled State Role | Editing State Role | Failed Text | Booting
 
 data Interface m = Interface {
   -- add or remove a user from a role
@@ -48,51 +59,78 @@ data Interface m = Interface {
   getState ::  m (ES (Either Text State))
   }
 
-parts :: Role -> State -> Partition User
-parts r rs = uncurry Partition . (id &&& (\\) (rs ! allUsers)) $ (rs ! r)
+fixTitleUsers r = if r == allUsers then "Users" else r
+fixTitlePermissions r = if r == allPermissions then "Permissions" else r
 
-specialCase :: Role -> [User] -> State -> State
-specialCase ((==) allUsers -> True) us = fmap $ filter (`elem` us)
-specialCase _ us = over (ix allUsers) $ \us' -> us ++ (us' \\ us)
+usersCfg r = DynamicListCfg
+  (if r == allUsers then "(delete)" else "(revoke)")
+  "updating server..."
 
-
+permissionsCfg r = DynamicListCfg
+  (if r == allPermissions then "(delete)" else "(remove)")
+  "updating server..."
+data Phase = Editor | Roler
 rolesW :: (MS m)
-            => Interface m
-            -> Source m (Message (EitherG State Role)) RolesMorph
-rolesW (Interface addDelState moveInState getState) = Source core where
+            => DS Phase
+            -> Interface m
+            -> Source m (Message (EitherG State Phase)) RolesMorph
+rolesW phase (Interface addDelState moveInState getState) = Source core where
 
-    usersCfg = DynamicListCfg "(revoke)" "updating server..."
 
     partitionerCfg = PartitionCfg "updating server..."
-
-    core (Roling rs) = fmap rightG . divClass "roling" $ do
-          fmap (fmap (Roled rs). leftmost) . el  "ul" . forM (keys rs) $ \w ->
-                el "li" $ do
-                  (w <$) <$> button w
-
-    core (Roled rs r) = divClass "roled" $ do
+    core (Editing rs r) = divClass "editing" $ do
+        let partings = parts permissions rolePermissions r
         toRoles <- divClass "back" $ button "\x2630"
-        divClass "title" $ text r
-        edit <- fmap (r <$) . divClass "edit" $ button "\x270e"
+        edit <- fmap (Roler <$) . divClass "title" $ button (fixTitlePermissions r)
         rec   us <- (unDynList <$>) <$> do
                     divClass "changer" $
-                      runDynListP usersCfg (addDelState r) (DynList $
-                        rs ! r) (DynList <$> flip (!) r <$> updated rs')
+                      runDynListP (permissionsCfg r) (addDelState r) (DynList $
+                        rolePermissions r rs) (DynList <$> rolePermissions r <$> updated rs')
 
-              ps <- if r /= allUsers then  divClass "mover" $
-                runPartitionSetP partitionerCfg (moveInState r) (parts r rs) $
-                        parts r <$> updated rs'
+              ps <- if r /= allPermissions then  divClass "mover" $
+                runPartitionSetP partitionerCfg (moveInState r) (partings rs) $
+                  partings <$> updated rs'
                     else return never
 
-              rs' <- foldDyn (\(f,us) -> insert r us . f) rs $
-                leftmost [(specialCase r &&& id) <$> us,
-                          (const id &&& id) <$> (\(Partition xs _) -> xs) <$> ps
-                         ]
-
+              rs' <- foldDyn (setPermissions r) rs $
+                leftmost [us,(\(Partition xs _) -> xs) <$> ps]
         return . merge $ [
-                RightG :=> Roling <$> tagPromptlyDyn rs' toRoles,
-                LeftG :=> leftG(updated rs'),
-                LeftG :=> rightG edit
+                RightG :=> leftmost [Roling <$> tagPromptlyDyn rs' toRoles,
+                  attachPromptlyDynWith Roled rs' $ r <$ edit],
+                LeftG :=> leftmost [leftG (updated rs'),rightG edit]
+                ]
+
+
+    core (Roling rs) = fmap rightG . divClass "roling" $ do
+          let rephase Editor = Editing rs
+              rephase Roler = Roled rs
+
+          fmap (attachWith rephase (current phase) . leftmost) .
+              el  "ul" . forM (roles rs) $ \w ->
+                el "li" $ do
+                  (w <$) <$> button (fixTitlePermissions w)
+
+
+    core (Roled rs r) = divClass "roled" $ do
+        let partings = parts users roleUsers r
+        toRoles <- divClass "back" $ button "\x2630"
+        edit <- fmap (Editor <$) . divClass "title" $ button (fixTitleUsers r)
+        rec   us <- (unDynList <$>) <$> do
+                    divClass "changer" $
+                      runDynListP (usersCfg r) (addDelState r) (DynList $
+                        roleUsers r rs) (DynList <$> roleUsers r <$> updated rs')
+
+              ps <- if r /= allUsers then  divClass "mover" $
+                runPartitionSetP partitionerCfg (moveInState r) (partings rs) $
+                  partings  <$> updated rs'
+                    else return never
+
+              rs' <- foldDyn (setUsers r) rs $
+                leftmost [us,(\(Partition xs _) -> xs) <$> ps]
+        return . merge $ [
+                RightG :=> leftmost [Roling <$> tagPromptlyDyn rs' toRoles,
+                  attachPromptlyDynWith Editing rs' $ r <$  edit],
+                LeftG :=> leftmost [leftG (updated rs'),rightG edit]
                 ]
 
     core Booting = divClass "booting" $ do
@@ -114,27 +152,23 @@ css = $(embedStringFile "./roles.css")
 
 ---------------------  simulation ----------------------
 
-roles =[("Admins",["paolino","meditans"]),("Authors",["legolas","machupichu"]),
-  ("Commenters",["blackfirst","zanzibar","marco"])]
-    :: [(Role,[User])]
-
-fixRoles rs = fromList $ r:rs where
-  r = (allUsers, nub . concat . map snd  $ rs)
 
 fakeInterface :: MS m => Interface m
 fakeInterface = Interface
   (const fakeUpdate)
   (const fakeUpdate)
-  (fake [(1,Left "problem getting initial state"),(2, Right $ fixRoles roles)])
+  (fake [(1,Left "problem getting initial state"),(2, Right example)])
 
 
 main = mainWidget $ do
   el "style" $ text $ css
-  s <- fmap fan . divClass "operation" $ do
-    runSource (rolesW fakeInterface) Booting
+  s <- divClass "operation" $ do
+          rec ph <- holdDyn Roler (sselect RightG s)
+              s <- fan <$> runSource (rolesW ph fakeInterface) Booting
+          return s
   _ <- divClass "log" $ do
     ss <- holdDyn mempty $ sselect LeftG s
     domMorph renderUsers $ ss
+    -- dynText $ (pack . show) <$> ss
   return ()
-
 

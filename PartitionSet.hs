@@ -15,8 +15,10 @@ import Reflex.Dom
 import Fake
 import NonTextual
 import ExternalPhase
+import qualified Data.Set as S
+import Data.Foldable
 
-data Partition a = Partition [a] [a]
+data Partition a = Partition (S.Set a) (S.Set a)
 
 data PartitionCfg = PartitionCfg {
   updatingMessage :: Text
@@ -26,11 +28,11 @@ type instance Config (Partition a) = PartitionCfg
 
 instance Plugin (Partition a) where
   data Operation (Partition a) = Move a
-  type Use (Partition a) = (Eq a, PrettyShow a)
-  operate (Move x) (Partition xs@(elem x -> True) ys) = Partition (delete x xs) (x:ys)
-  operate (Move x) (Partition xs ys) = Partition (x:xs) (delete x ys)
+  type Use (Partition a) = (Ord a, Eq a, PrettyShow a)
+  operate (Move x) (Partition xs@(S.member x -> True) ys) = Partition (S.delete x xs) (S.insert x ys)
+  operate (Move x) (Partition xs ys) = Partition (S.insert x xs) (S.delete x ys)
 
-updating cfg xs@(Partition (sort -> ls) (sort -> rs)) _ = do
+updating cfg xs@(Partition (toList -> ls) (toList -> rs)) _ = do
     divClass "left" $ el  "ul" . forM ls $ \x ->
           el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
 
@@ -38,7 +40,7 @@ updating cfg xs@(Partition (sort -> ls) (sort -> rs)) _ = do
           el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
     return ()
 
-listening cfg xs@(Partition (sort -> ls) (sort -> rs)) = do
+listening cfg xs@(Partition (toList -> ls) (toList -> rs)) = do
     ml <- divClass "left" $ fmap leftmost . el  "ul" . forM ls $ \x ->
           el "li" $ (x <$) <$> (button $ prettyShow $ x)
 
