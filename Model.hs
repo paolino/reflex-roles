@@ -134,9 +134,9 @@ roles = flatten _Role
 users :: Knowledge Concept -> [Text]
 users = flatten _User
 
-userRoles :: Concept -> Knowledge Concept -> [[Concept]]
-userRoles = query [_Role]
+userRoles :: Text -> Knowledge Concept -> [[Concept]]
+userRoles x = query [_Role] (User x)
 
-userPrermissions :: Concept -> Knowledge Concept -> [[Concept]]
-userPrermissions = query [_Role,_Permission]
+userPrermissions :: Text  -> Knowledge Concept -> [[Concept]]
+userPrermissions x = query [_Role,_Permission] (User x)
 
