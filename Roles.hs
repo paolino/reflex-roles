@@ -92,7 +92,7 @@ rolesW phase (Interface addDelState moveInState getState) = Source core where
                   partings <$> updated rs'
                     else return never
 
-              rs' <- foldDyn (setPermissions r) rs $
+              rs' <- foldDyn (setSub (rolePermissions,permissions,Permission,allPermissions) r) rs $
                 leftmost [us,(\(Partition xs _) -> xs) <$> ps]
         return . merge $ [
                 RightG :=> leftmost [Roling <$> tagPromptlyDyn rs' toRoles,
@@ -106,7 +106,7 @@ rolesW phase (Interface addDelState moveInState getState) = Source core where
               rephase Roler = Roled rs
 
           fmap (attachWith rephase (current phase) . leftmost) .
-              el  "ul" . forM (roles rs) $ \w ->
+            el  "ul" . forM (toList $ roles rs) $ \w ->
                 el "li" $ do
                   (w <$) <$> button (fixTitlePermissions w)
 
@@ -125,7 +125,7 @@ rolesW phase (Interface addDelState moveInState getState) = Source core where
                   partings  <$> updated rs'
                     else return never
 
-              rs' <- foldDyn (setUsers r) rs $
+              rs' <- foldDyn (setSub (roleUsers,users,User,allUsers) r) rs $
                 leftmost [us,(\(Partition xs _) -> xs) <$> ps]
         return . merge $ [
                 RightG :=> leftmost [Roling <$> tagPromptlyDyn rs' toRoles,

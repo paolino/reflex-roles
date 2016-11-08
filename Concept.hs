@@ -1,9 +1,7 @@
 
 {-# language TemplateHaskell,OverloadedStrings, NoMonomorphismRestriction, ViewPatterns, LambdaCase #-}
 
-module Concept (example, roles, users, roleUsers, Concept (..) ,_User,_Role,_Permission, allUsers, setUsers, insertUser,
-  setPermissions, insertPermission,rolePermissions,allPermissions,permissions
-               ) where
+module Concept where
 
 import Data.Text (Text)
 import Control.Lens.TH
@@ -110,64 +108,32 @@ makeKC cs rs = do
       psk = foldr (\u -> modify $ Insert (Link (Permission u) r)) usk $ ps
   return $ psk
 
-roles :: Knowledge Concept -> [Text]
-roles = flatten _Role
-
-users :: Knowledge Concept -> S.Set Text
+roles = S.fromList . flatten _Role
 users = S.fromList . flatten _User
-
 permissions = S.fromList . flatten _Permission
+
 
 roleUsers x =  S.fromList . toListOf (traverse . _User) . head . query [_User] (Role $ eitherAllUsers x)
 rolePermissions x =  S.fromList . toListOf (traverse . _Permission) . head . query [_Permission] (Role $ eitherAllUsers x)
 
-insertUser :: Text -> Knowledge Concept -> Knowledge Concept
-insertUser u k =  let
-  aus = users k
+-- insertUOrP :: Text -> Knowledge Concept -> Knowledge Concept
+insertSub (_,subs,sub,allSubs) u k =  let
+  aus = subs k
   in ($ k) $ case u `S.member` aus of
       False -> let
-        adduser = modify (Insert (Vertex (User u))) -- no problem
-        addlink  = modify (Insert (Link (User u) (Role (Left allUsers))))
-          in addlink . adduser
+        addsub = modify (Insert (Vertex (sub u))) -- no problem
+        addlink  = modify (Insert (Link (sub u) (Role (Left allSubs))))
+          in addlink . addsub
       True -> id
 
-setUsers :: Text -> S.Set Text -> Knowledge Concept -> Knowledge Concept
-setUsers r@((==) allUsers -> True) us k = let
-  aus = roleUsers r k
-  neg = foldr (\u -> modify (Delete (Vertex (User u)))) k $ aus S.\\ us
-  in foldr (\u -> insertUser u) neg $ us S.\\ aus
-setUsers r us k = let
-  aus = roleUsers r k
-  pre = foldr (\u -> modify (Insert (Link (User u) (Role $ Right r))) . insertUser u) k $ us S.\\ aus
-  in foldr (\u -> modify (Delete (Link (User u) (Role $ Right r)))) pre $ aus S.\\ us
-
-insertPermission :: Text -> Knowledge Concept -> Knowledge Concept
-insertPermission u k =  let
-  aus = users k
-  in ($ k) $ case u `S.member` aus of
-      False -> let
-        adduser = modify (Insert (Vertex (Permission u))) -- no problem
-        addlink  = modify (Insert (Link (Permission u) (Role (Left allPermissions))))
-          in addlink . adduser
-      True -> id
-
-setPermissions :: Text -> S.Set Text -> Knowledge Concept -> Knowledge Concept
-setPermissions r@((==) allPermissions -> True) us k = let
-  aus = rolePermissions r k
-  neg = foldr (\u -> modify (Delete (Vertex (Permission u)))) k $ aus S.\\ us
-  in foldr (\u -> insertPermission u) neg $ us S.\\ aus
-
-setPermissions r us k = let
-  aus = rolePermissions r k
-  pre = foldr (\u -> modify (Insert (Link (Permission u) (Role $ Right r))) . insertPermission u) k $ us S.\\ aus
-  in foldr (\u -> modify (Delete (Link (Permission u) (Role $ Right r)))) pre $ aus S.\\ us
-
-
-
-userRoles :: Text -> Knowledge Concept -> [[Concept]]
-userRoles x = query [_Role] (User x)
-
-userPrermissions :: Text  -> Knowledge Concept -> [[Concept]]
-userPrermissions x = query [_Role,_Permission] (User x)
+-- setSub :: Text -> S.Set Text -> Knowledge Concept -> Knowledge Concept
+setSub e@(roleSubs,_,sub,allSubs) r@((==) allSubs -> True) us k = let
+  aus = roleSubs r k
+  neg = foldr (\u -> modify (Delete (Vertex (sub u)))) k $ aus S.\\ us
+  in foldr (\u -> insertSub e u) neg $ us S.\\ aus
+setSub e@(roleSubs,_,sub,allSubs) r us k = let
+  aus = roleSubs r k
+  pre = foldr (\u -> modify (Insert (Link (sub u) (Role $ Right r))) . insertSub e u) k $ us S.\\ aus
+  in foldr (\u -> modify (Delete (Link (sub u) (Role $ Right r)))) pre $ aus S.\\ us
 
 Just example = makeKC cs rs
