@@ -73,7 +73,9 @@ modify (Delete (Link c1 c2)) k@(Knowledge g cs) = case (,) <$> M.lookup c1 cs <*
             Nothing -> k
             Just (n1,n2) -> Knowledge (delEdge (n1,n2) g) cs
 
-
+-- | retrieve a class of the knowledge
+flatten :: Selector a -> Knowledge a -> [Text]
+flatten t (Knowledge _ cs) = toListOf (traverse .  clonePrism t) $ M.keys cs
 ----------------- example -------------------------------------------
 data Concept = User Text | Role Text | Permission Text deriving (Show,Eq,Ord)
 
@@ -125,3 +127,16 @@ rs = [          (1,9, ()),
                 ]
 example :: Knowledge Concept
 example = knowledge cs rs
+
+roles :: Knowledge Concept -> [Text]
+roles = flatten _Role
+
+users :: Knowledge Concept -> [Text]
+users = flatten _User
+
+userRoles :: Concept -> Knowledge Concept -> [[Concept]]
+userRoles = query [_Role]
+
+userPrermissions :: Concept -> Knowledge Concept -> [[Concept]]
+userPrermissions = query [_Role,_Permission]
+
