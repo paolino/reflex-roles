@@ -13,4 +13,4 @@ run in browser with
   stack --stack-yaml  stack.js.yaml build
   firefox .stack-work/dist/x86_64-linux/Cabal-1.24.0.0_ghcjs/build/Roles/Roles.jsexe/index.html 
 ```
-
+Play with it [here](http://lambdasistemi.net/public/reflex-frp-snippets.jsexe/)
