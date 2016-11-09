@@ -1,5 +1,7 @@
 
-{-# language TemplateHaskell,OverloadedStrings, NoMonomorphismRestriction, ViewPatterns, LambdaCase #-}
+{-# language TemplateHaskell,OverloadedStrings, NoMonomorphismRestriction,
+   StandaloneDeriving, ViewPatterns, LambdaCase, DataKinds,GADTs, KindSignatures,
+   FlexibleInstances, FlexibleContexts#-}
 
 module Concept where
 
@@ -7,9 +9,12 @@ import Data.Text (Text)
 import Control.Lens.TH
 import Control.Lens
 import Model
+
 import qualified Data.Set as S
 import qualified Data.Map as M
 import Control.Monad
+import Data.Function
+import Control.Applicative
 
 import Data.Graph.Inductive
 
@@ -19,6 +24,7 @@ eitherAllUsers ((==) allUsers -> True) = Left allUsers
 eitherAllUsers x = Right x
 eitherAllPermissions ((==) allPermissions -> True) = Left allPermissions
 eitherAllPermissions x = Right x
+
 ----------------- example -------------------------------------------
 data Concept = User Text | Role (Either Text Text) | Permission Text deriving (Show,Eq,Ord)
 
@@ -37,6 +43,94 @@ _Permission = prism Permission $ \x -> case x of
                               Permission y -> Right y
                               x -> Left x
 
+data Some (f :: ConceptT -> *) where
+  Some :: f (a:: ConceptT) -> Some f
+
+data ConceptT = UserT | RoleT | PermissionT
+
+data Concept2 a where
+  User2 ::  Text -> Concept2 UserT
+  Role2 ::  Text -> Concept2 RoleT
+  Permission2 ::  Text -> Concept2 PermissionT
+
+deriving instance Show (Concept2 a)
+instance Eq (Concept2 a) where
+  (User2 t) == (User2 r) = r == t
+  (Role2 t) == (Role2 r) = r == t
+  (Permission2 t) == (Permission2 r) = r == t
+
+instance Ord (Concept2 a) where
+  (User2 t) `compare` (User2 r) = r `compare` t
+  (Role2 t) `compare` (Role2 r) = r `compare` t
+  (Permission2 t) `compare` (Permission2 r) = r `compare` t
+
+coupling :: Some Concept2 -> Maybe (Int,Text)
+coupling = \s -> (,) 1 <$> pc _User2t s <|> (,) 2 <$> pc _Role2t s <|> (,) 3 <$> pc _Permission2t s where
+  pc = preview . clonePrism
+
+deriving instance Show (Some Concept2)
+
+instance Eq (Some Concept2)  where
+  (==) = (==) `on` coupling
+instance Ord (Some Concept2) where
+  compare = compare `on` coupling
+
+-- make
+_User2t :: APrism' (Some Concept2) Text
+_User2t = prism (Some . User2) $ \case
+              Some (User2 y) -> Right $ y
+              x -> Left x
+_Role2t :: APrism' (Some Concept2) Text
+_Role2t = prism (Some . Role2) $ \case
+              Some (Role2 y) -> Right $ y
+              x -> Left x
+_Permission2t :: APrism' (Some Concept2) Text
+_Permission2t = prism (Some . Permission2) $ \case
+              Some (Permission2 y) -> Right $ y
+              x -> Left x
+
+_User2 :: APrism' (Some Concept2) (Concept2 UserT)
+_User2 = prism Some $ \case
+              Some (User2 y) -> Right $ User2 y
+              x -> Left x
+_Role2 :: APrism' (Some Concept2) (Concept2 RoleT)
+_Role2 = prism Some $ \case
+              Some (Role2 y) -> Right $ Role2 y
+              x -> Left x
+
+_Permission2 :: APrism' (Some Concept2) (Concept2 PermissionT)
+_Permission2 = prism Some $ \case
+              Some (Permission2 y) -> Right $ Permission2 y
+              x -> Left x
+
+{-
+_User2 = prism User2 $ \x -> case x of
+                              User2 y -> Right y
+                              x -> Left x
+_Role2 = prism Role2 $ \x -> case x of
+                              Role2 y -> Right y
+                              x -> Left x
+-}
+cs' :: [LNode (Some Concept2)]
+cs' =  [
+                (1,Some $ Role2 "Account administrator"),
+                (2,Some $ Role2 "Product administrator"),
+                (3,Some $ Role2 "Product editor"),
+                (4,Some $ Permission2 "View product"),
+                (5,Some $ Permission2 "Edit product textual content"),
+                (6,Some $ Permission2 "Edit product properties"),
+                (7,Some $ Permission2 "Edit product price"),
+                (8,Some $ Permission2 "Edit product images"),
+
+                (9,Some $ User2 "admin@mydomain.com"),
+                (10,Some $ User2 "otheradmin@mydomain.com"),
+                (11,Some $ User2 "yetanotheradmin@mydomain.com"),
+                (12,Some $ User2 "user1@mydomain.com"),
+                (13,Some $ User2 "user2@mydomain.com"),
+                (14,Some $ User2 "user3@mydomain.com"),
+                (15,Some $ User2 "user4@mydomain.com"),
+                (16,Some $ User2 "user7@mydomain.com")
+      ]
 
 -- makePrisms ''Concept
 cs :: [LNode Concept]

@@ -27,6 +27,7 @@ import qualified Data.Set as S
 import Concept
 import Data.Foldable
 import Debug.Trace
+import Input
 
 type User = Text
 type Role = Text
@@ -45,7 +46,7 @@ parts elems roleElems r k = let
 renderUsers :: (MS m) => State -> m (ES a)
 renderUsers k = divClass "state" $ do
   elClass "span" "title" $ text "User list"
-  trace (show $ users k) $ el "ul" $ forM_ (toList $ users k) $ el "li" . text
+  el "ul" $ forM_ (toList $ users k) $ el "li" . text
   return never
 
 data RolesMorph = Roling State | Roled State Role | Editing State Role | Failed Text | Booting
@@ -59,25 +60,29 @@ data Interface m = Interface {
   getState ::  m (ES (Either Text State))
   }
 
-fixTitleUsers r = if r == allUsers then "Users" else r
-fixTitlePermissions r = if r == allPermissions then "Permissions" else r
+fixTitleUsers r = if r == allUsers then "Permissions" else r
+fixTitlePermissions r = if r == allPermissions then "Users" else r
 
 usersCfg r = DynamicListCfg
   (if r == allUsers then "(delete)" else "(revoke)")
   "updating server..."
+  "new user"
 
 permissionsCfg r = DynamicListCfg
   (if r == allPermissions then "(delete)" else "(remove)")
   "updating server..."
+  "new permission"
+
 data Phase = Editor | Roler
+
+
 rolesW :: (MS m)
             => DS Phase
             -> Interface m
             -> Source m (Message (EitherG State Phase)) RolesMorph
 rolesW phase (Interface addDelState moveInState getState) = Source core where
 
-
-    partitionerCfg = PartitionCfg "updating server..."
+    partitionerCfg = PartitionCfg "updating server..." "exclude" "include"
     core (Editing rs r) = divClass "editing" $ do
         let partings = parts permissions rolePermissions r
         toRoles <- divClass "back" $ button "\x2630"
@@ -105,11 +110,19 @@ rolesW phase (Interface addDelState moveInState getState) = Source core where
           let rephase Editor = Editing rs
               rephase Roler = Roled rs
 
-          fmap (attachWith rephase (current phase) . leftmost) .
+          r <-  fmap (leftmost) .
             el  "ul" . forM (toList $ roles rs) $ \w ->
                 el "li" $ do
-                  (w <$) <$> button (fixTitlePermissions w)
+                  s <- ((attachWith rephase (current phase)) . (w <$)) <$> button (fixTitlePermissions w)
+                  d <- case w `elem` ([allUsers, allPermissions]::[Text]) of
+                         False -> divClass "deleteRole" $ button "\x2717"
+                         True -> return never
+                  return $ leftmost [s,Roling (modify (Delete (Vertex (Role (Right w)))) rs) <$ d]
 
+
+          new <- resettable True (Just "new role")
+
+          return $ leftmost [r, (\n -> Editing (modify (Insert (Vertex (Role (Right n)))) rs) n) <$> new]
 
     core (Roled rs r) = divClass "roled" $ do
         let partings = parts users roleUsers r

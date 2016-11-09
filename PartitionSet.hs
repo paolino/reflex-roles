@@ -21,7 +21,9 @@ import Data.Foldable
 data Partition a = Partition (S.Set a) (S.Set a)
 
 data PartitionCfg = PartitionCfg {
-  updatingMessage :: Text
+  updatingMessage :: Text,
+  titleLeft :: Text,
+  titleRight :: Text
   }
 
 type instance Config (Partition a) = PartitionCfg
@@ -33,18 +35,28 @@ instance Plugin (Partition a) where
   operate (Move x) (Partition xs ys) = Partition (S.insert x xs) (S.delete x ys)
 
 updating cfg xs@(Partition (toList -> ls) (toList -> rs)) _ = do
-    divClass "left" $ el  "ul" . forM ls $ \x ->
+    divClass "left" $ do
+      divClass "title" $ text (titleLeft cfg)
+      el  "ul" . forM ls $ \x ->
           el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
 
-    divClass "right" $ el  "ul" . forM rs $ \x ->
+
+    divClass "right" $ do
+      divClass "title" $ text (titleRight cfg)
+      el  "ul" . forM rs $ \x ->
           el "li" $ elAttr "button" [("disabled","")] $ text $ prettyShow $ x
     return ()
 
 listening cfg xs@(Partition (toList -> ls) (toList -> rs)) = do
-    ml <- divClass "left" $ fmap leftmost . el  "ul" . forM ls $ \x ->
+    ml <- divClass "left" $ fmap leftmost $ do
+      divClass "title" $ text (titleLeft cfg)
+      el  "ul" . forM ls $ \x ->
           el "li" $ (x <$) <$> (button $ prettyShow $ x)
 
-    rl <- divClass "right" $ fmap leftmost . el  "ul" . forM rs $ \x ->
+    rl <- divClass "right" $ fmap leftmost $ do
+        divClass "title" $ text (titleRight cfg)
+
+        el  "ul" . forM rs $ \x ->
             el "li" $ (x <$) <$> (button $ prettyShow $ x )
 
     return $ Move <$> leftmost [ml,rl]

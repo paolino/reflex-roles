@@ -22,7 +22,8 @@ import qualified Data.Set as S
 
 data DynamicListCfg = DynamicListCfg {
   elemSelect :: Text,
-  updatingMessage :: Text
+  updatingMessage :: Text,
+  placeHolder :: Text
  }
 
 type instance Config (DynList a) = DynamicListCfg
@@ -40,7 +41,7 @@ type WC a = (Show a, CanParse a, Eq a, PrettyShow a, Ord a)
 listening   :: (MS m, WC a)
             => ListeningP m (DynList a)
 listening cfg (DynList (toList -> xs)) = do
-  add <- fmap canParse <$> resettable True Nothing -- to be fixed with a more serious input
+  add <- fmap canParse <$> resettable True (Just $ placeHolder cfg) -- to be fixed with a more serious input
   del <- fmap leftmost . el  "ul" . forM xs $ \x ->
         el "li" $ do
           el "span"  $ text (prettyShow $ x)

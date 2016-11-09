@@ -4,7 +4,7 @@
 -- Totally type unsafe. In particular there is no control on the existance of
 -- non sensical edges
 --
-module Model (Knowledge,Selector,Operation(..),Target(..),query,modify, flatten,knowledge, graph,concepts) where
+module Model (Knowledge,Selector,Operation(..),Target(..),query,modify, flatten,knowledge, graph,concepts, query0) where
 
 import Data.Text (Text)
 import Data.Maybe (fromJust)
@@ -34,7 +34,7 @@ knowledge concepts relations = let
     (mkGraph concepts relations)
     (M.fromList $ map swap concepts)
 
-query0 :: Ord a => Selector a -> a -> Knowledge a -> [Text]
+-- query0 :: Ord a => Selector a -> a -> Knowledge a -> [Text]
 query0 t c (Knowledge g cs) = toListOf (traverse  . clonePrism t) $ let
     (Just (map snd -> ys,_,_, map snd -> xs),_) = match (cs M.! c) g
     resolve = map (fromJust . lab g)
